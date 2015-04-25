@@ -21,21 +21,24 @@ Outline:
    defendant to which the docket relates.
 
 TODO: A user can't customize queries without editing this module. Maybe
-      fix that?
+      fix that?  Or call it a feature?
 """
 
 def query_directory(path, destination):
   """
-  In: A path to a directory containing xml files representing dockets
+  In: A path to a directory containing xml files representing dockets and
+      a path to a file where the results will be saved. Should be a .csv
+      file.
   Inside:
   Output: A list of dicts written.
   """
   records = []
-  files_iterator = glob.iglob(path) #should make the glob more restrictive.
+  files_iterator = glob.iglob(path) #TODO: should make the glob more
+                                    #      restrictive.
   for file in files_iterator:
     docket = Docket(file)
-    new_records = docket.get_guilty_sequence_records()
-    records = records + new_records
+    new_records_list = docket.get_guilty_sequence_records()
+    records = records + new_records_list
 
   write_guilty_sequence_records(records, destination, mode="a")
   return records
@@ -103,7 +106,7 @@ def scrape_sentence_info(sentence):
   min_length_time = sentence.xpath("length_of_sentence/min_length/time/text()")[0].strip()
   min_length_unit = sentence.xpath("length_of_sentence/min_length/unit/text()")[0].strip()
   max_length_time = sentence.xpath("length_of_sentence/max_length/time/text()")[0].strip()
-  max_length_unit = sentence.xpath("length_of_sentence/max_length/time/text()")[0].strip()
+  max_length_unit = sentence.xpath("length_of_sentence/max_length/unit/text()")[0].strip()
   return {"sentence_program": program,
           "min_length": convert_time(min_length_time, min_length_unit),
           "max_length": convert_time(max_length_time, max_length_unit)}
@@ -147,8 +150,10 @@ def scrape_action(action):
     }
   """
   actions = []
-  judge = action.xpath("judge_name/text()")[0].strip()
-  date = action.xpath("date/text()")[0].strip()
+  # judge = action.xpath("judge_name/text()")[0].strip()
+#   date = action.xpath("date/text()")[0].strip()
+  judge = xpath_or_log(action, "judge_name/text()", "judge")
+  date = xpath_or_log(action, "date/text()", "action_date")
   base_action = {"judge":judge,
                  "action_date":date}
   for sentence in action.xpath("sentence_info"):
@@ -188,24 +193,45 @@ def get_actions_with_sentences(sequence):
   """
   return sequence.xpath("judge_action[sentence_info]")
 
+def xpath_or_log(element, query_string, variable_sought):
+  """
+  This method is for retrieving a text value from an xml element.
+  It is only to be used when there is only one of the desired value in
+  the xml element.
+
+  Input: 1) An etree element.
+         2) The xpath query for the variable being sought
+         3) The name of the variable sought, to include in the
+            returned "[variable] unknown" if the query doesn't work.
+  Output: 1) The text of the variable sought, if possible, or
+          2) a string "[variable] unknown" if the query does not find
+             text.
+          3) Writes to a log if the variable's not found.
+  """
+  query_results = element.xpath(query_string)
+  if len(query_results) > 0:
+    return query_results[0].strip()
+  else:
+    return "%s unknown" % variable_sought
+
 class Docket():
 
   def __init__(self, path):
     self.tree = load_tree_from_path(path)
 
   def get_docket_number(self):
-    return self.tree.xpath("/docket/header/docket_number/text()")[0].strip()
+    return xpath_or_log(self.tree, "/docket/header/docket_number/text()", "docket_number")
 
   def get_defendant_name(self):
-    return self.tree.xpath("/docket/header/caption/defendant/text()")[0].strip()
+    return xpath_or_log(self.tree, "/docket/header/caption/defendant/text()", "defendant_name")
 
   def get_defendant_birthdate(self):
-    return self.tree.xpath("/docket/section[@name='Defendant_Information']/defendant_information/birth_date/text()")[0].strip()
+    return xpath_or_log(self.tree, "/docket/section[@name='Defendant_Information']/defendant_information/birth_date/text()", "defendant_birthdate")
 
   def get_guilty_sequence_records(self):
     """
-    THIS IS A VERY IMPORTANT METHOD. It returns the 'observations' that
-    analysis will be based on.
+    THIS IS A VERY IMPORTANT METHOD. It returns the 'observations' from a
+    docket that analysis will be based on.
 
     Method returns a list of dictionaries with data describing the sentencing for
     offenses with guilty dispositions (pleas or not).  The dictionary has
@@ -234,8 +260,8 @@ class Docket():
 
     guilty_sequences = self.tree.xpath("//sequence[contains(./offense_disposition, 'Guilty') and (judge_action/sentence_info/length_of_sentence)]")
     for sequence in guilty_sequences:
-       charge = sequence.xpath("sequence_description/text()")[0].strip()
-       disposition = sequence.xpath("offense_disposition/text()")[0].strip()
+       charge = xpath_or_log(sequence, "sequence_description/text()", "charge")
+       disposition = xpath_or_log(sequence, "offense_disposition/text()", "offense_disposition")
        actions_with_sentences = get_actions_with_sentences(sequence)
        for action in actions_with_sentences:
          action_list = scrape_action(action)
