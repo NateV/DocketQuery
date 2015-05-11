@@ -5,8 +5,9 @@ import csv
 import os
 import glob
 import re
+import logging
 
-import pytest
+import pytest # For debugging.
 
 """
 docket_query is a tool for retrieving information from a criminal docket that
@@ -24,24 +25,25 @@ TODO: A user can't customize queries without editing this module. Maybe
       fix that?  Or call it a feature?
 """
 
-def query_directory(path, destination):
+def query_directory(path, records_destination, errors_destination):
   """
   In: A path to a directory containing xml files representing dockets and
       a path to a file where the results will be saved. Should be a .csv
       file.
-  Inside:
-  Output: A list of dicts written.
+  Output: A list of dicts written and a list of errors that occurred.
   """
   records = []
+  errors = []
   files_iterator = glob.iglob(path) #TODO: should make the glob more
                                     #      restrictive.
   for file in files_iterator:
     docket = Docket(file)
-    new_records_list = docket.get_guilty_sequence_records()
+    new_records_list, new_errors = docket.get_guilty_sequence_records()
     records = records + new_records_list
+    errors = errors + new_errors
 
-  write_guilty_sequence_records(records, destination, mode="a")
-  return records
+  write_guilty_sequence_records(records, records_destination, errors, errors_destination, mode="a")
+  return records, errors
 
 def load_from_path(path):
   """
@@ -76,7 +78,7 @@ def convert_time(period, unit):
                 # 30.41666 is the average length of a month in non
                 # leap-year.
   else:
-    day_count = 0
+    day_count=0
   return datetime.timedelta(days=day_count)
 
 def scrape_sentence_info(sentence):
@@ -102,11 +104,11 @@ def scrape_sentence_info(sentence):
          "min_length": <timedelta days=365>,
          "max_length": <timedelta days=365>}
   """
-  program = sentence.xpath("program/text()")[0].strip()
-  min_length_time = sentence.xpath("length_of_sentence/min_length/time/text()")[0].strip()
-  min_length_unit = sentence.xpath("length_of_sentence/min_length/unit/text()")[0].strip()
-  max_length_time = sentence.xpath("length_of_sentence/max_length/time/text()")[0].strip()
-  max_length_unit = sentence.xpath("length_of_sentence/max_length/unit/text()")[0].strip()
+  program = xpath_or_log(sentence, "program/text()", "program")
+  min_length_time = xpath_or_log(sentence, "length_of_sentence/min_length/time/text()", "min_length_time")
+  min_length_unit = xpath_or_log(sentence, "length_of_sentence/min_length/unit/text()", "min_length_unit")
+  max_length_time = xpath_or_log(sentence, "length_of_sentence/max_length/time/text()", "max_length_time")
+  max_length_unit = xpath_or_log(sentence, "length_of_sentence/max_length/unit/text()", "max_length_unit")
   return {"sentence_program": program,
           "min_length": convert_time(min_length_time, min_length_unit),
           "max_length": convert_time(max_length_time, max_length_unit)}
@@ -150,8 +152,6 @@ def scrape_action(action):
     }
   """
   actions = []
-  # judge = action.xpath("judge_name/text()")[0].strip()
-#   date = action.xpath("date/text()")[0].strip()
   judge = xpath_or_log(action, "judge_name/text()", "judge")
   date = xpath_or_log(action, "date/text()", "action_date")
   base_action = {"judge":judge,
@@ -162,7 +162,7 @@ def scrape_action(action):
     actions.append(new_action)
   return actions
 
-def write_guilty_sequence_records(records, destination, mode="w+"):
+def write_guilty_sequence_records(records, records_destination, errors, errors_destination, mode="w+"):
   """
   Input: 1) Records from dockets,
          2) the name of a .csv file for saving the output
@@ -172,7 +172,7 @@ def write_guilty_sequence_records(records, destination, mode="w+"):
             observations.
   Output: The list of dicts with the observations recorded.
   """
-  with open(destination, mode, newline='') as csvfile:
+  with open(records_destination, mode, newline='') as csvfile:
     fieldnames =  ["docket_number", "defendant_name", "birth_date", "judge", "action_date",
                    "charge", "disposition", "sentence_program", "min_length",
                    "max_length"]
@@ -181,7 +181,16 @@ def write_guilty_sequence_records(records, destination, mode="w+"):
     for record in records:
       writer.writerow(record)
   csvfile.close()
-  return records
+
+  with open(errors_destination, mode, newline='') as errors_file:
+    fieldnames =["file", "error_field"]
+    writer = csv.DictWriter(errors_file, fieldnames = fieldnames)
+    writer.writeheader()
+    for error in errors:
+      writer.writerow(error)
+  errors_file.close()
+
+  return records, errors
 
 def get_actions_with_sentences(sequence):
   """
@@ -212,11 +221,14 @@ def xpath_or_log(element, query_string, variable_sought):
   if len(query_results) > 0:
     return query_results[0].strip()
   else:
+    #TODO: Log something?
     return "%s unknown" % variable_sought
+
 
 class Docket():
 
   def __init__(self, path):
+    self.path = path
     self.tree = load_tree_from_path(path)
 
   def get_docket_number(self):
@@ -240,7 +252,7 @@ class Docket():
      "defendant_name": "",
      "birth_date": "",
      "judge": "",
-     "date": "",
+     "action_date": "",
      "charge": "",
      "disposition": "",
      "sentence_program": "",
@@ -269,7 +281,20 @@ class Docket():
            action_dict.update(base_record)
            action_dict.update({"charge":charge, "disposition":disposition})
            records.append(action_dict)
-    return records
+
+    errors = []
+    for record in records:
+      for key, value in record.items():
+        if "length" not in key:
+          if "unknown" in value:
+            errors.append({"file": self.path,
+                           "error_field": key})
+        if key == "length":
+          if value==datetime.timedelta(days==0):
+            errors.append({"file": self.path,
+                           "error_field":key})
+
+    return records, errors
 
 
 
