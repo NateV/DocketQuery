@@ -1,4 +1,4 @@
-import docket_query
+from scripts import guilty_records_query
 import sys
 import getopt
 import logging
@@ -52,7 +52,7 @@ def get_parameters():
 def run(parsed_xml_dir, destination_csv, logfile, errorfile):
   print("Starting...")
   logging.basicConfig(filename=logfile, level=logging.DEBUG)
-  docket_query.query_directory(parsed_xml_dir, destination_csv, errorfile)
+  records_query.query_directory(parsed_xml_dir, destination_csv, errorfile)
 
 
 if __name__ == "__main__":

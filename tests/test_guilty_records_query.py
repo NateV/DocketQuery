@@ -1,4 +1,4 @@
-from docket_query import Docket, load_from_path, load_tree_from_path, \
+from scripts.guilty_records_query import Docket, load_from_path, load_tree_from_path, \
                          convert_time, scrape_action, \
                          write_guilty_sequence_records, \
                          get_actions_with_sentences, query_directory, \
@@ -10,17 +10,23 @@ import pytest
 import os
 
 def test_load_from_path():
-  path = "./test/texts/CP-51-CR-0000001-2011_stitched_complete.xml"
+  path = "tests/texts/CP-51-CR-0000001-2011_stitched_complete.xml"
   docket = load_from_path(path)
   assert "Glynnis" in docket
 
 def test_load_tree_from_path():
-  path = "./test/texts/CP-51-CR-0000001-2011_stitched_complete.xml"
+  path = "tests/texts/CP-51-CR-0000001-2011_stitched_complete.xml"
   docket = load_tree_from_path(path)
   assert docket.getroot().tag == "docket"
 
 def test_convert_time():
   assert convert_time("7 1/2","years") == datetime.timedelta(days=2737.5)
+  assert convert_time("1.00","Years") == datetime.timedelta(days=365)
+  assert convert_time("1", "year") == datetime.timedelta(days=365)
+  assert convert_time("11 1/2","months") == datetime.timedelta(days=349.83000000000004)
+  assert convert_time("23","months") == datetime.timedelta(days=699.6600000000001)
+  assert convert_time("3.00","Years") == datetime.timedelta(days=1095)
+
 
 def test_scrape_action():
   action = etree.parse(StringIO("""<judge_action>
@@ -75,6 +81,24 @@ def test_scrape_sentence_info():
   assert sentence_info["min_length"] == convert_time("12","months")
   assert sentence_info["max_length"] == convert_time("12","months")
 
+  sentence_info = etree.parse(StringIO("""<sentence_info>
+              <program>Probation</program>
+              <length_of_sentence>
+                <min_length>
+                  <time>1.00</time>
+                  <unit>Years</unit>
+                </min_length>
+                <max_length>
+                  <time>1.00</time>
+                  <unit>Years</unit>
+                </max_length>
+              </length_of_sentence>
+              <extra_sentence_details>Max of 1.00 Years... 1 year... Probation is to be served non-reporting....</extra_sentence_details>
+            </sentence_info>"""))
+  sentence_info = scrape_sentence_info(sentence_info)
+  assert sentence_info["min_length"] == datetime.timedelta(days=365*1)
+  assert sentence_info["max_length"] == datetime.timedelta(days=365*1)
+
   # Test a broken one.
   info_missing_program =  etree.parse(StringIO("""<sentence_info>
               <length_of_sentence>
@@ -94,9 +118,9 @@ def test_scrape_sentence_info():
   assert info_missing_program["sentence_program"] == "program unknown"
 
 def test_write_guilty_sequence_records():
-  docket = Docket("./test/texts/CP-51-CR-0000001-2011_stitched_complete.xml")
+  docket = Docket("tests/texts/CP-51-CR-0000001-2011_stitched_complete.xml")
   records, errors = docket.get_guilty_sequence_records()
-  records, errors = write_guilty_sequence_records(records, "./test/output/single_test_records.csv", errors, "./test/output/single_test_errors.csv")
+  records, errors = write_guilty_sequence_records(records, "tests/output/single_test_records.csv", errors, "tests/output/single_test_errors.csv")
   assert len(records) == 3
   assert len(errors) == 0
 
@@ -136,11 +160,11 @@ def test_get_actions_with_sentences():
   assert actions[0].xpath("date/text()")[0].strip() == "09/09/2011"
 
 def test_query_directory():
-  directory_path = "./test/text1/*"
-  records_destination = "./test/output/query_directory_records.csv"
+  directory_path = "tests/more_texts/*"
+  records_destination = "tests/output/query_directory_records.csv"
   if os.path.exists(records_destination):
     os.remove(records_destination)
-  errors_destination = "./test/output/query_directory_errors.csv"
+  errors_destination = "tests/output/query_directory_errors.csv"
   if os.path.exists(errors_destination):
     os.remove(errors_destination)
 
@@ -170,25 +194,31 @@ class TestDocket:
     #TODO - need to test what get returns if docket is broken.
 
   def test_get_defendant_name(self):
-    docket = Docket("./test/texts/CP-51-CR-0000001-2011_stitched_complete.xml")
+    docket = Docket("tests/texts/CP-51-CR-0000001-2011_stitched_complete.xml")
     assert docket.get_defendant_name() == "Samuel Mccray"
-    docket = Docket("./test/texts/CP-51-CR-0000012-2011_stitched_complete.xml")
+    docket = Docket("tests/texts/CP-51-CR-0000012-2011_stitched_complete.xml")
     assert docket.get_defendant_name() == "Sergio V V. Moore"
 
   def test_get_defendant_birthdate(self):
-    docket = Docket("./test/texts/CP-51-CR-0000001-2011_stitched_complete.xml")
+    docket = Docket("tests/texts/CP-51-CR-0000001-2011_stitched_complete.xml")
     assert docket.get_defendant_birthdate() == "07/24/1964"
-    docket = Docket("./test/texts/CP-51-CR-0000012-2011_stitched_complete.xml")
+    docket = Docket("tests/texts/CP-51-CR-0000012-2011_stitched_complete.xml")
     assert docket.get_defendant_birthdate() == "02/24/1983"
 
   def test_get_docket_number(self):
-    docket = Docket("./test/texts/CP-51-CR-0000001-2011_stitched_complete.xml")
+    docket = Docket("tests/texts/CP-51-CR-0000001-2011_stitched_complete.xml")
     assert docket.get_docket_number() == "CP-51-CR-0000001-2011"
-    docket = Docket("./test/texts/CP-51-CR-0000012-2011_stitched_complete.xml")
+    docket = Docket("tests/texts/CP-51-CR-0000012-2011_stitched_complete.xml")
     assert docket.get_docket_number() == "CP-51-CR-0000012-2011"
 
+  def test_get_date_filed(self):
+    docket = Docket("tests/texts/CP-51-CR-0000001-2011_stitched_complete.xml")
+    assert docket.get_date_filed() == "01/03/2011"
+    docket = Docket("tests/texts/CP-51-CR-0000012-2011_stitched_complete.xml")
+    assert docket.get_date_filed() == "01/03/2011"
+
   def test_get_guilty_sequence_records(self):
-    docket = Docket("./test/texts/CP-51-CR-0000001-2011_stitched_complete.xml")
+    docket = Docket("tests/texts/CP-51-CR-0000001-2011_stitched_complete.xml")
     records, errors = docket.get_guilty_sequence_records()
     assert records[0]["judge"] == "Hill, Glynnis"
     assert records[0]["action_date"] == "09/09/2011"
@@ -196,11 +226,7 @@ class TestDocket:
     assert records[0]["max_length"] == convert_time("15","years")
 
     # A docket that does not have any guilty sequences to scrape
-    docket = Docket("./test/texts/CP-51-CR-0000012-2011_stitched_complete.xml")
+    docket = Docket("tests/texts/CP-51-CR-0000012-2011_stitched_complete.xml")
     records, errors = docket.get_guilty_sequence_records()
     assert len(records) == 0
-
-    # A docket with broken xml
-    docket = Docket("./test/texts/CP-51-CR-0000001-2011_broken.xml")
-    records, errors = docket.get_guilty_sequence_records()
 

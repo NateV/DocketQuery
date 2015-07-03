@@ -173,7 +173,7 @@ def write_guilty_sequence_records(records, records_destination, errors, errors_d
   Output: The list of dicts with the observations recorded.
   """
   with open(records_destination, mode, newline='') as csvfile:
-    fieldnames =  ["docket_number", "defendant_name", "birth_date", "judge", "action_date",
+    fieldnames =  ["docket_number", "date_filed", "defendant_name", "birth_date", "judge", "action_date",
                    "charge", "disposition", "sentence_program", "min_length",
                    "max_length"]
     writer = csv.DictWriter(csvfile, fieldnames = fieldnames)
@@ -191,6 +191,13 @@ def write_guilty_sequence_records(records, records_destination, errors, errors_d
   errors_file.close()
 
   return records, errors
+
+def get_birth_date_and_created_date(docket):
+  """
+  This method is for retrieving just the defendant's birth date
+  and the date the docket was created.
+  """
+  pass
 
 def get_actions_with_sentences(sequence):
   """
@@ -234,11 +241,16 @@ class Docket():
   def get_docket_number(self):
     return xpath_or_log(self.tree, "/docket/header/docket_number/text()", "docket_number")
 
+
+
   def get_defendant_name(self):
     return xpath_or_log(self.tree, "/docket/header/caption/defendant/text()", "defendant_name")
 
   def get_defendant_birthdate(self):
     return xpath_or_log(self.tree, "/docket/section[@name='Defendant_Information']/defendant_information/birth_date/text()", "defendant_birthdate")
+
+  def get_date_filed(self):
+    return xpath_or_log(self.tree, "/docket/section[@name='Case_Information']/case_info/date_filed/text()", "date_filed")
 
   def get_guilty_sequence_records(self):
     """
@@ -249,6 +261,7 @@ class Docket():
     offenses with guilty dispositions (pleas or not).  The dictionary has
     the following form:
     {"docket_number": "",
+     "date_filed": "",
      "defendant_name": "",
      "birth_date": "",
      "judge": "",
@@ -268,7 +281,8 @@ class Docket():
     # docket.
     base_record = {"docket_number": self.get_docket_number(),
                    "defendant_name": self.get_defendant_name(),
-                   "birth_date" : self.get_defendant_birthdate()}
+                   "birth_date" : self.get_defendant_birthdate(),
+                   "date_filed": self.get_date_filed()}
 
     guilty_sequences = self.tree.xpath("//sequence[contains(./offense_disposition, 'Guilty') and (judge_action/sentence_info/length_of_sentence)]")
     for sequence in guilty_sequences:

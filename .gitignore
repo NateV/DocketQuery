@@ -1,4 +1,11 @@
 *.pyc
-test/
+tests/pdfs
+tests/texts/**
+texts/more_texts
+texts/output/**
 **/.pdf
 **/.pyc
+__pycache__/
+*.egg-info/
+*.swp
+*.xml
