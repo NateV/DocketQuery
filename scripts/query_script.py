@@ -4,8 +4,6 @@ import getopt
 import logging
 import yaml
 
-# For example:
-# python -m query_script -s /Volumes/DOCKETS/CP_51_CR_all_2011_parsed/complete/*.xml -d /Volumes/DOCKETS/CP_51_CR_all_2011_parsed/query_results.csv -e /Volumes/DOCKETS/CP_51_CR_all_2011_parsed/query_errors.csv -l /Volumes/DOCKETS/CP_51_CR_all_2011_parsed/query_log.md
 
 def get_parameters():
   """
