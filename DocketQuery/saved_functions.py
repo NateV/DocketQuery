@@ -1,4 +1,7 @@
 import pytest
+import re
+from fractions import Fraction
+import datetime
 
 #  This file contains functions used to scrape data from dockets.
 #  Each function receives a docket as an lxml ElementTree and the name of the
@@ -10,7 +13,6 @@ import pytest
 #    2) A list of dicts that are observations pulled from dockets.
 
 
-# Example functions
 def docket_number_and_name(docket_tree, file_name):
   #Input: a docket as an ElementTree
   #Output: 1) A list of errors. Each error is a hash identifying the file
@@ -143,7 +145,7 @@ def conviction_information(docket_tree, file_name):
         try:
           min_time = sentence.xpath("length_of_sentence/min_length/time/text()")[0].strip()
           min_unit = sentence.xpath("length_of_sentence/min_length/unit/text()")[0].strip()
-          sentence_info["min_time"] = ' '.join([min_time, min_unit])
+          sentence_info["min_time"] = convert_time(min_time, min_unit).days
         except Exception as e:
           errors.append({"error_file":file_name,
                          "error_field":"sequence_{}/action_{}/sentence_{}/min_time".format(i,i2, i3),
@@ -153,7 +155,7 @@ def conviction_information(docket_tree, file_name):
         try:
           max_time = sentence.xpath("length_of_sentence/max_length/time/text()")[0].strip()
           max_unit = sentence.xpath("length_of_sentence/max_length/unit/text()")[0].strip()
-          sentence_info["max_time"] = ' '.join([max_time, max_unit])
+          sentence_info["max_time"] = convert_time(max_time, max_unit).days
         except Exception as e:
           errors.append({"error_file":file_name,
                          "error_field":"sequence_{}/action_{}/sentence_{}/max_time".format(i,i2, i3),
@@ -227,3 +229,20 @@ def scrape_sentence_info(sentence):
           "max_length": convert_time(max_length_time, max_length_unit)}
 
 
+def convert_time(period, unit):
+  """
+  In: A period of time as a number and the unit of that number, as in:
+      ("7 1/2", "years")
+  Out: A timedelta object of the input time period.
+  """
+  year_pattern = re.compile("year", flags=re.I)
+  month_pattern = re.compile("month", flags=re.I)
+  if re.search(year_pattern, unit) != None:
+    day_count = sum([float(Fraction(quantity)) * 365 for quantity in period.split()])
+  elif re.search(month_pattern, unit) != None:
+    day_count = sum([float(Fraction(quantity)) * 30.42 for quantity in period.split()])
+                # 30.41666 is the average length of a month in non
+                # leap-year.
+  else:
+    return ' '.join([period, unit, "(cannot parse time)"])
+  return datetime.timedelta(days=day_count)

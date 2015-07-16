@@ -29,7 +29,7 @@ def test_conviction_information():
   errors, results = conviction_information(etree.parse(file_name), file_name)
   assert re.match(re.compile('Rape', flags=re.I), results[0]["charge_desc"])
   assert re.match(re.compile('.*3121.*'), results[0]["charge_section"])
-  assert re.match(re.compile('.*15 years.*'), results[0]['max_time'])
+  assert results[0]['max_time'] == 5475
 
 
 

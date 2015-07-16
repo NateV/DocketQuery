@@ -3,7 +3,7 @@ from DocketQuery.saved_functions import conviction_information
 import os
 
 src = "/Volumes/DOCKETS/CP_51_CR_all_2011_parsed/complete/"
-dest = "/Volumes/DOCKETS/CP_51_CR_all_2011_parsed/query_results/"
+dest = "/Users/nathanvogel/Documents/Python/YSRP/statistics/convictions_query/"
 # src = "tests/texts/"
 # dest = "tests/output/query_results/"
 
@@ -16,3 +16,9 @@ docket_query.dicts2csv(errors, results,
                        open(dest + "results.csv", 'w'),
                        counts = counts,
                        counts_file = open(dest + "counts.csv", 'w'))
+with open(dest + "readme.md", "w") as f:
+  f.write("""
+  This script applies the conviction information function to all the
+  parsed dockets.
+""")
+f.close()
